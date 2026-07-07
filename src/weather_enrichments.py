@@ -138,11 +138,6 @@ def fetch_site_weather(site_key: str, lat: float, lon: float,
 
 
 def enrich_with_weather(df: pd.DataFrame, top_n: int = 10) -> pd.DataFrame:
-    """
-    Main entry point. Adds real weather columns for launches at recognized
-    top sites. Launches at unrecognized/low-volume sites, or dates where the
-    fetch failed, get weather_available=False and NaN weather values.
-    """
     df = df.copy()
     df["weather_available"] = False
     df["wind_speed_max_kmh"] = np.nan
@@ -150,37 +145,39 @@ def enrich_with_weather(df: pd.DataFrame, top_n: int = 10) -> pd.DataFrame:
     df["precipitation_mm"] = np.nan
 
     top_sites = get_top_launch_sites(df, top_n=top_n)
-
     if top_sites.empty:
-        print("No known sites matched — check SITE_COORDINATES against your launch_site strings.")
+        print("No known sites matched — check SITE_COORDINATES against your location strings.")
         return df
 
-    print(f"Matched {len(top_sites)} known sites:")
+    print(f"Matched {len(top_sites)} launch pads across recognized facilities:")
     print(top_sites[["raw_site_name", "site_key", "launch_count"]].to_string(index=False))
     print()
 
     df["_date_str"] = pd.to_datetime(df["launch_date"]).dt.strftime("%Y-%m-%d")
 
-    for _, row in top_sites.iterrows():
-        site_mask = df["launch_site"] == row["raw_site_name"]
-        site_dates = df.loc[site_mask, "launch_date"]
+    # Fetch weather ONCE per unique facility (site_key), not once per pad code
+    weather_cache = {}
+    for site_key, group in top_sites.groupby("site_key"):
+        lat, lon = group.iloc[0]["lat"], group.iloc[0]["lon"]
+        pad_codes = group["raw_site_name"].tolist()
+
+        combined_mask = df["launch_site"].isin(pad_codes)
+        site_dates = df.loc[combined_mask, "launch_date"]
         if site_dates.empty:
             continue
 
         start_date = site_dates.min().strftime("%Y-%m-%d")
         end_date = site_dates.max().strftime("%Y-%m-%d")
 
-        weather_df = fetch_site_weather(row["site_key"], row["lat"], row["lon"], start_date, end_date)
+        weather_df = fetch_site_weather(site_key, lat, lon, start_date, end_date)
         if weather_df.empty:
             continue
+        weather_cache[site_key] = weather_df.set_index("date")
 
-        weather_df = weather_df.set_index("date")
-
-        for idx in df[site_mask].index:
+        for idx in df[combined_mask].index:
             date_str = df.at[idx, "_date_str"]
-            if date_str in weather_df.index:
-                w = weather_df.loc[date_str]
-                # .loc can return a Series (single match) — guard against duplicate dates
+            if date_str in weather_cache[site_key].index:
+                w = weather_cache[site_key].loc[date_str]
                 if isinstance(w, pd.DataFrame):
                     w = w.iloc[0]
                 df.at[idx, "wind_speed_max_kmh"] = w["wind_speed_max_kmh"]
@@ -189,17 +186,6 @@ def enrich_with_weather(df: pd.DataFrame, top_n: int = 10) -> pd.DataFrame:
                 df.at[idx, "weather_available"] = True
 
     df = df.drop(columns=["_date_str"])
-
     coverage = df["weather_available"].mean()
     print(f"\nFinal weather coverage: {df['weather_available'].sum()} / {len(df)} launches ({coverage:.1%})")
-
     return df
-
-
-if __name__ == "__main__":
-    # Quick standalone test
-    df = pd.read_csv("data/processed/launches_clean.csv", parse_dates=["launch_date"])
-    enriched = enrich_with_weather(df, top_n=10)
-    enriched.to_csv("data/processed/launches_with_weather.csv", index=False)
-    print(enriched[["launch_date", "launch_site", "weather_available",
-                     "wind_speed_max_kmh", "temp_max_c"]].dropna(subset=["wind_speed_max_kmh"]).head(10))
