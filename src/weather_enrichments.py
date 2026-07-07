@@ -43,18 +43,20 @@ def match_known_site(location_str: str):
 
 def get_top_launch_sites(df: pd.DataFrame, top_n: int = 10) -> pd.DataFrame:
     """
-    Identifies which of the dataset's top launch sites (by launch count)
-    we have coordinates for. Looks a bit wider than top_n since not every
-    high-volume site will have a coordinate match.
+    Identifies which of the dataset's top launch pads (by launch count) belong
+    to a recognized facility. Matching is done against the full 'location'
+    string (which contains the facility name), not 'launch_site' (which is
+    just the specific pad code, e.g. 'LC-39A' or 'Site 41/1').
     """
     site_counts = df["launch_site"].value_counts().head(top_n * 3)
     matched = []
     for site_name, count in site_counts.items():
-        match = match_known_site(site_name)
+        sample_location = df.loc[df["launch_site"] == site_name, "location"].iloc[0]
+        match = match_known_site(sample_location)
         if match:
             matched.append({
-                "raw_site_name": site_name,
-                "site_key": match[0],
+                "raw_site_name": site_name,   # still the pad code — used for filtering later
+                "site_key": match[0],          # the recognized facility name
                 "lat": match[1],
                 "lon": match[2],
                 "launch_count": count,
