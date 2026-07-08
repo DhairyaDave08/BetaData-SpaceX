@@ -22,11 +22,7 @@ NUMERIC_COLS = [
 
 
 def era_stratified_split(df: pd.DataFrame, test_size: float = 0.2):
-    """
-    Splits by TIME, not randomly. The most recent launches become the test set.
-    This respects the 'no future leakage' constraint and mirrors real usage
-    (predicting upcoming launches using only historical data).
-    """
+    
     df = df.sort_values("launch_date").reset_index(drop=True)
     split_idx = int(len(df) * (1 - test_size))
     train_df = df.iloc[:split_idx].copy()
@@ -41,11 +37,7 @@ def era_stratified_split(df: pd.DataFrame, test_size: float = 0.2):
 
 
 def build_logistic_pipeline() -> Pipeline:
-    """
-    Baseline model. Logistic Regression needs imputed numeric values (no
-    native NaN handling, unlike XGBoost), so we impute weather columns with
-    the median and keep 'weather_available' as an explicit flag feature.
-    """
+   
     categorical_transformer = OneHotEncoder(handle_unknown="ignore")
     numeric_transformer = SimpleImputer(strategy="median")
 
