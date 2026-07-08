@@ -46,7 +46,7 @@ Space launch is one of the most capital-intensive, risk-laden activities in engi
 
 - **Demo video:** [YouTube link — unlisted] *(add link here)*
 - **Dashboard:** run locally via `streamlit run dashboard/app.py` (see [Setup](#setup--reproduction))
-- **Presentation deck:** [`presentation/slides.pptx`](presentation/BetaData-SpaceX.pdf)
+- **Presentation deck:** [`presentation/BetaData-SpaceX.pdf`](presentation/BetaData-SpaceX.pdf)
 
 ---
 
