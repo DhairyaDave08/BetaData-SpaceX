@@ -1,14 +1,4 @@
-"""
-Space Mission Risk Analytics — Streamlit Dashboard.
 
-Two views:
-1. Historical Analytics — success rates sliced by vehicle, site, decade, payload class.
-2. What-If Simulator — user picks inputs, sees live calibrated risk score + SHAP explanation.
-
-Run locally: streamlit run dashboard/app.py
-(Requires: models/model.pkl, models/model_metadata.json, data/processed/features.csv
- all present in the cloned repo — this dashboard does NOT retrain or refetch anything.)
-"""
 
 import streamlit as st
 import pandas as pd
@@ -38,7 +28,7 @@ def get_model_and_metadata():
 
 @st.cache_data
 def get_features():
-    return pd.read_csv("data/processed/features.csv", parse_dates=["launch_date"])
+    return pd.read_csv("Data/processed/features.csv", parse_dates=["launch_date"])
 
 
 @st.cache_resource
