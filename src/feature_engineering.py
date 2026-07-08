@@ -1,15 +1,9 @@
-"""
-Feature engineering for space mission risk model.
-Core principle: every feature for a launch at time T must only use
-information available strictly BEFORE T (no future leakage).
-"""
+
 
 import pandas as pd
 import numpy as np
 
 
-# --- Static payload capacity lookup (public knowledge; dataset has no payload mass column) ---
-# Approximate max LEO payload capacity in kg. Documented explicitly as an assumption.
 ROCKET_PAYLOAD_CAPACITY_KG = {
     "Falcon 9": 22800, "Falcon Heavy": 63800, "Atlas V": 18850,
     "Delta IV": 28790, "Delta II": 6100, "Soyuz": 7020, "Proton": 23000,
