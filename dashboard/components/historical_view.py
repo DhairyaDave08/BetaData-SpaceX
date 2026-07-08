@@ -61,17 +61,28 @@ def _plot_by_country(df: pd.DataFrame):
     st.pyplot(fig)
     plt.close(fig)
 
-
 def _plot_by_rocket_family(df: pd.DataFrame):
     st.markdown("**By Rocket Family (top 10 by volume)**")
+    
+    # Check if data exists before processing
     agg = df.groupby("rocket_family_grouped")["mission_success"].agg(["mean", "count"])
     agg = agg[agg.index != "other"].sort_values("count", ascending=False).head(10)
+    
+    if agg.empty:
+        st.warning("No data available to plot for Rocket Families.")
+        return
 
     fig, ax = plt.subplots(figsize=(5, 3.5))
     ax.barh(agg.index[::-1], agg["mean"][::-1], color="#dc2626")
     ax.set_xlabel("Success rate")
     ax.set_xlim(0, 1.05)
-    plt.tight_layout()
+    
+    # Use draw() or explicitly handle layout if tight_layout fails
+    try:
+        plt.tight_layout()
+    except Exception:
+        pass 
+        
     st.pyplot(fig)
     plt.close(fig)
 
