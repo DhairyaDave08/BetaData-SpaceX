@@ -27,12 +27,7 @@ FEATURE_COLS = CATEGORICAL_COLS + NUMERIC_COLS
 
 
 def _prepare_input(input_dict: dict) -> pd.DataFrame:
-    """
-    Converts a dict of raw inputs (from a form, simulator, or batch row)
-    into a single-row DataFrame matching the model's expected columns.
-    Missing fields are filled with sensible defaults so partial inputs
-    (e.g., a what-if simulator that doesn't set weather) still work.
-    """
+   
     defaults = {
         "rocket_family_grouped": "other",
         "launch_site_grouped": "other",
