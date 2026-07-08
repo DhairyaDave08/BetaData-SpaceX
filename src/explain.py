@@ -1,9 +1,4 @@
-"""
-SHAP-based explainability for individual mission predictions.
-Uses a model-agnostic Permutation explainer since the final model is a
-CalibratedClassifierCV wrapping a full sklearn Pipeline (preprocessing +
-Random Forest) — not a raw tree model, so TreeExplainer doesn't apply here.
-"""
+
 
 import pandas as pd
 import numpy as np
@@ -12,25 +7,8 @@ import shap
 from src.predict import FEATURE_COLS, load_model
 
 
-def build_explainer(model, background_df: pd.DataFrame, sample_size: int = 50):
-    """
-    Builds a SHAP explainer around the model's predict_proba function.
-    background_df should be a sample of realistic training rows (used as
-    the reference distribution for permutation-based attribution).
-    Kept small (default 50 rows) since KernelExplainer/Permutation scales
-    with background size and this needs to run interactively in a dashboard.
-    """
-    background = background_df[FEATURE_COLS].sample(
-        min(sample_size, len(background_df)), random_state=42
-    )
-
-    def predict_fn(X):
-        X_df = pd.DataFrame(X, columns=FEATURE_COLS)
-        return model.predict_proba(X_df)[:, 1]  # probability of SUCCESS
-
-    explainer = shap.Explainer(predict_fn, background, algorithm="permutation")
-    return explainer
-
+CATEGORICAL_COLS = ["rocket_family_grouped", "launch_site_grouped", "country_grouped"]
+NUMERIC_COLS = [c for c in FEATURE_COLS if c not in CATEGORICAL_COLS]
 
 FEATURE_LABELS = {
     "rocket_family_grouped": "Rocket family",
@@ -53,18 +31,74 @@ FEATURE_LABELS = {
 }
 
 
+def _build_category_maps(reference_df: pd.DataFrame) -> dict:
+    """Builds a stable category -> integer code mapping per categorical column."""
+    maps = {}
+    for col in CATEGORICAL_COLS:
+        categories = sorted(reference_df[col].astype(str).unique().tolist())
+        if "other" not in categories:
+            categories.append("other")
+        maps[col] = {cat: i for i, cat in enumerate(categories)}
+    return maps
+
+
+def _encode(df: pd.DataFrame, category_maps: dict) -> pd.DataFrame:
+    """Converts categorical string columns to integer codes. Numeric columns pass through."""
+    df = df.copy()
+    for col in CATEGORICAL_COLS:
+        code_map = category_maps[col]
+        df[col] = df[col].astype(str).map(lambda v: code_map.get(v, code_map["other"]))
+    return df[FEATURE_COLS].astype(float)
+
+
+def _decode(encoded_row: np.ndarray, category_maps: dict) -> pd.DataFrame:
+    """Converts an encoded numeric row back into a real DataFrame the model can score."""
+    row_dict = dict(zip(FEATURE_COLS, encoded_row))
+    for col in CATEGORICAL_COLS:
+        code = int(round(row_dict[col]))
+        reverse_map = {v: k for k, v in category_maps[col].items()}
+        row_dict[col] = reverse_map.get(code, "other")
+    return pd.DataFrame([row_dict])[FEATURE_COLS]
+
+
+def build_explainer(model, background_df: pd.DataFrame, sample_size: int = 50):
+    """
+    Builds a SHAP explainer around the model's predict_proba function,
+    operating entirely in numeric-encoded space to avoid SHAP's known
+    issue with mixed string/numeric columns in the permutation masker.
+    """
+    category_maps = _build_category_maps(background_df)
+
+    background_sample = background_df[FEATURE_COLS].sample(
+        min(sample_size, len(background_df)), random_state=42
+    )
+    background_encoded = _encode(background_sample, category_maps)
+
+    def predict_fn(X_encoded):
+        X_encoded = np.atleast_2d(X_encoded)
+        rows = [_decode(row, category_maps) for row in X_encoded]
+        X_decoded = pd.concat(rows, ignore_index=True)
+        return model.predict_proba(X_decoded)[:, 1]
+
+    explainer = shap.Explainer(predict_fn, background_encoded, algorithm="permutation")
+    explainer._category_maps = category_maps  # stash for use in explain_instance
+    return explainer
+
+
 def explain_instance(explainer, instance_df: pd.DataFrame, top_k: int = 5) -> list:
     """
     Returns the top_k features driving this instance's SUCCESS probability,
-    translated into plain-language reasons for a non-technical investigator.
-    Positive SHAP value = pushes toward success; negative = pushes toward failure.
+    translated into plain-language reasons. Positive SHAP value = pushes
+    toward success; negative = pushes toward failure.
     """
-    shap_values = explainer(instance_df[FEATURE_COLS])
+    category_maps = explainer._category_maps
+    instance_encoded = _encode(instance_df, category_maps)
+
+    shap_values = explainer(instance_encoded)
     values = shap_values.values[0]
-    features = FEATURE_COLS
 
     contributions = sorted(
-        zip(features, values, instance_df[FEATURE_COLS].iloc[0]),
+        zip(FEATURE_COLS, values, instance_df[FEATURE_COLS].iloc[0]),
         key=lambda x: abs(x[1]),
         reverse=True,
     )[:top_k]
