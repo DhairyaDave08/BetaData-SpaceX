@@ -23,7 +23,7 @@ def get_model_and_metadata():
 
 @st.cache_data
 def get_features():
-    return pd.read_csv("Data/features.csv", parse_dates=["launch_date"])
+    return pd.read_csv("Data/processed/features.csv", parse_dates=["launch_date"])
 
 @st.cache_resource
 def get_explainer(_model, _features):
@@ -39,7 +39,7 @@ def main():
         explainer = get_explainer(model, features)
     except FileNotFoundError as e:
         st.error(f"Missing required file: {e}")
-        st.info("Make sure `models/model.pkl`, `models/model_metadata.json`, and `Data/features.csv` are present in your cloned repo.")
+        st.info("Make sure `models/model.pkl`, `models/model_metadata.json`, and `Data/processed/features.csv` are present in your cloned repo.")
         return
 
     tab1, tab2 = st.tabs(["📊 Historical Analytics", "🎛️ What-If Simulator"])
